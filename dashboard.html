@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UniGuard AI - Ultimate SOC Terminal</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #030303; color: #00ff00; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 20px; }
+        .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;}
+        h1 { margin: 0; color: #ffffff; letter-spacing: 2px;}
+        .stat-box { background-color: #111; padding: 15px; border: 1px solid #333; text-align: center; }
+        .stat-box h2 { margin: 0; font-size: 2rem; color: #00ff00; }
+        .stat-box h2.danger { color: #ff3333; text-shadow: 0 0 10px #ff0000; }
+        table { width: 100%; border-collapse: collapse; background-color: #0a0a0a; border: 1px solid #222;}
+        th, td { padding: 10px; text-align: left; border-bottom: 1px dotted #333; font-size: 0.9rem;}
+        th { background-color: #151515; color: #888; text-transform: uppercase;}
+        .alert-row { color: #ff5555; }
+        .badge-crit { background-color: #aa0000; color: white; padding: 4px 8px; font-weight: bold; border-radius: 2px;}
+        .preview { font-size: 0.75rem; color: #aaa; background: #1a1a1a; padding: 4px; display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+        
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;}
+        .chart-container { background: #111; padding: 10px; border: 1px solid #333; }
+        .chart-title { margin-top: 0; color: #888; font-size: 0.85rem; border-bottom: 1px solid #333; padding-bottom: 5px; text-align: center;}
+        #live-log { background:#000; padding:10px; height:120px; overflow-y:auto; font-size:0.8rem; text-align:left; border: 1px solid #333; color: #0f0; line-height: 1.4; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>UniGuard AI <span style="font-size: 1.2rem; color: #555;">Multi-Vector Edition</span></h1>
+            <p style="color: #888; margin-top: 5px;">[SYS] Tracking Volumetric, Entropic, and Behavioral Threats via Data Diode.</p>
+        </div>
+        <div style="animation: blink 1s infinite; color: #00ff00; font-weight: bold;">● LIVE TELEMETRY</div>
+    </div>
+
+    <!-- Stats & Live Log -->
+    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+        <div style="display: flex; flex-direction: column; gap: 15px; flex: 1;">
+            <div class="stat-box"><h2 id="total-flows">0</h2><p style="color:#666; margin:0;">FLOWS EVALUATED</p></div>
+            <div class="stat-box"><h2 id="total-alerts" class="danger">0</h2><p style="color:#666; margin:0;">THREATS DETECTED</p></div>
+        </div>
+        <div class="stat-box" style="flex: 4; text-align: left; padding: 10px;">
+            <h3 class="chart-title" style="color: #00ff00; border:none; text-align:left;">PROCESS VISUALIZER (Target ➔ Diode ➔ AI Engine)</h3>
+            <div id="live-log">> SYSTEM ONLINE. AWAITING TELEMETRY...<br></div>
+        </div>
+    </div>
+
+    <!-- 4 Charts for the 4 Attack Types -->
+    <div class="grid-container">
+        <div class="chart-container">
+            <h3 class="chart-title">1. Payload Volume (Detects EXFILTRATION)</h3>
+            <canvas id="bytesChart" height="60"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3 class="chart-title">2. Data Entropy (Detects DNS TUNNELLING)</h3>
+            <canvas id="entropyChart" height="60"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3 class="chart-title">3. Connection Rate (Detects DDoS FLOODING)</h3>
+            <canvas id="rateChart" height="60"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3 class="chart-title">4. Distinct Ports (Detects PORT SCANNING)</h3>
+            <canvas id="portsChart" height="60"></canvas>
+        </div>
+    </div>
+
+    <h3 style="color: #fff; border-bottom: 1px solid #333; padding-bottom: 5px;">>> AI INCIDENT REPORT <<</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Attack Type</th>
+                <th>Time</th>
+                <th>Source IP</th>
+                <th>AI Conf.</th>
+                <th>AI Feature Diagnostics</th>
+                <th>Payload Snippet</th>
+            </tr>
+        </thead>
+        <tbody id="alerts-table">
+            <tr><td colspan="6" style="text-align: center; color: #444;">Awaiting network telemetry...</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        const opts = { animation: false, scales: { y: { beginAtZero: true, grid: { color: '#222' } }, x: { display: false } }, plugins: { legend: { display: false } } };
+        
+        function makeChart(id) { return new Chart(document.getElementById(id).getContext('2d'), { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: [] }] }, options: opts }); }
+        
+        const bytesChart = makeChart('bytesChart');
+        const entropyChart = makeChart('entropyChart');
+        const rateChart = makeChart('rateChart');
+        const portsChart = makeChart('portsChart');
+
+        let lastTime = "";
+
+        function updateDashboard() {
+            fetch('/api/status').then(res => res.json()).then(data => {
+                document.getElementById('total-flows').innerText = data.total_flows;
+                document.getElementById('total-alerts').innerText = data.alerts.length;
+                
+                if (data.history.length > 0) {
+                    const labels = data.history.map(h => h.time);
+                    const updateC = (chart, key) => {
+                        chart.data.labels = labels;
+                        chart.data.datasets[0].data = data.history.map(h => h[key]);
+                        chart.data.datasets[0].backgroundColor = data.history.map(h => h.is_threat ? '#ff3333' : '#00aa00');
+                        chart.update();
+                    };
+                    
+                    updateC(bytesChart, 'bytes');
+                    updateC(entropyChart, 'entropy');
+                    updateC(rateChart, 'rate');
+                    updateC(portsChart, 'ports');
+
+                    const logDiv = document.getElementById('live-log');
+                    data.history.forEach(flow => {
+                        if (flow.full_time > lastTime) {
+                            let line = `<span style="color:#aaa;">[${flow.time}]</span> `;
+                            line += `[SERVER] Processed req ➔ <span style="color:#00ffff;">[DIODE]</span> ➔ `;
+                            line += `[AI] Extracted (Vol:${flow.bytes}, Ent:${flow.entropy}, Rate:${flow.rate}, Ports:${flow.ports}) ➔ `;
+                            if(flow.is_threat) line += `<span style="color:#ff3333; font-weight:bold;">THREAT BLOCKED (${flow.confidence})</span><br>`;
+                            else line += `<span style="color:#00ff00;">CLEAN</span><br>`;
+                            logDiv.innerHTML += line;
+                            lastTime = flow.full_time;
+                            logDiv.scrollTop = logDiv.scrollHeight;
+                        }
+                    });
+                }
+                
+                const tbody = document.getElementById('alerts-table');
+                if (data.alerts.length > 0) {
+                    tbody.innerHTML = '';
+                    data.alerts.forEach(alert => {
+                        tbody.innerHTML += `<tr class="alert-row">
+                            <td><span class="badge-crit">${alert.attack_type}</span></td>
+                            <td>${alert.time}</td>
+                            <td>${alert.ip}</td>
+                            <td style="font-weight:bold;">${alert.confidence}</td>
+                            <td style="color:#ffaa00;">${alert.details}</td>
+                            <td><span class="preview" title="${alert.preview}">${alert.preview}</span></td>
+                        </tr>`;
+                    });
+                }
+            }).catch(e => console.log(e));
+        }
+        setInterval(updateDashboard, 1000);
+    </script>
+</body>
+</html>

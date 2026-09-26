@@ -1,6 +1,6 @@
-# UniGuard AI Prototype
+# UniGuard AI 
 
-This folder contains the complete, portable prototype for SIH26145. 
+
 
 It specifically solves your two requirements:
 1. **Easy to share**: You can ZIP this entire folder and send it to anyone. They just double-click `run.bat` and it works out-of-the-box on Windows.
